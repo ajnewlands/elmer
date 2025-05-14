@@ -1,0 +1,13 @@
+[package]
+name = "elmer"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+log="0.4"
+env_logger="0.11"
+anyhow="1"
+eframe={version="0.31", features=["default_fonts", "wgpu"]}
+egui-phosphor = "0.9"
+regex="1"
+url="2"
