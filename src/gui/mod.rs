@@ -1,102 +1,53 @@
+use std::rc::Rc;
+
 use eframe::egui::{
     self, Button, CentralPanel, Color32, CornerRadius, FontFamily, FontId, Frame, Grid, Id, Label,
-    Layout, RichText, ScrollArea, Sense, Spacing, TextEdit, TextStyle, TopBottomPanel, Ui, Vec2,
-    WidgetText,
+    Layout, Response, RichText, ScrollArea, Sense, Spacing, TextEdit, TextStyle, TopBottomPanel,
+    Ui, Vec2, WidgetText,
 };
 use egui_phosphor::regular as icon;
+use lapin::{options::QueueBindOptions, types::FieldTable};
+use model::ModelItem;
+use state::ConnectionStatus;
+
+use crate::rabbit::{ConnectionManager, ConnectionUpdate};
+pub mod connection_modal;
 mod model;
 mod state;
 
-pub struct App<'a> {
+mod enums;
+mod prelude;
+
+pub struct App {
     gui_state: state::GuiState,
-    gui_data: model::Model<'a>,
+    gui_data: model::Model,
+    connection_manager: ConnectionManager,
 }
 
-fn modal_label(ui: &mut Ui, label: &str, binding: &mut String, password: bool) {
-    let label1 = ui.label(RichText::new(label).size(16.0));
-    ui.add_sized(
-        [200.0, 24.0],
-        TextEdit::singleline(binding)
-            .password(password)
-            .vertical_align(egui::Align::Center)
-            .font(FontId {
-                size: 16.0,
-                family: FontFamily::Proportional,
-            }),
-    )
-    .labelled_by(label1.id);
-}
-
-impl App<'_> {
-    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+impl App {
+    pub fn new(_cc: &eframe::CreationContext<'_>, connection_manager: ConnectionManager) -> Self {
         Self {
             gui_state: state::GuiState::default(),
             gui_data: model::Model::default(),
-        }
-    }
-
-    fn show_connection_modal(&mut self, _ui: &mut Ui, ctx: &egui::Context) {
-        let modal = egui::containers::Modal::new(Id::new("connection"));
-
-        // Mutate temporary state; only committed on 'connect' (and not on 'cancel')
-        if let Some(con) = &mut self.gui_state.connection_modal_state {
-            let validation_error = con.build_url().err();
-            let validation_tooltip = if let Some(error) = &validation_error {
-                error.to_string()
-            } else {
-                String::default()
-            };
-
-            modal.show(ctx, |ui| {
-                Grid::new("data").min_col_width(80.0).show(ui, |ui| {
-                    modal_label(ui, "Hostname", &mut con.hostname, false);
-                    ui.end_row();
-
-                    modal_label(ui, "Virtual Host", &mut con.vhost, false);
-                    ui.end_row();
-
-                    modal_label(ui, "Username", &mut con.username, false);
-                    ui.end_row();
-
-                    modal_label(ui, "Password", &mut con.password, true);
-                    ui.end_row();
-
-                    ui.label("");
-                    ui.checkbox(&mut con.tls, RichText::new("Enable TLS").size(16.0));
-                    ui.end_row();
-                });
-
-                // Filthy hack to make layout work here.
-                ui.horizontal(|ui| {
-                    ui.add_enabled_ui(validation_error.is_none(), |ui| {
-                        if ui
-                            .add_sized(
-                                [140.0, 24.0],
-                                Button::new(RichText::new("Connect")).fill(Color32::DARK_GREEN),
-                            )
-                            .on_disabled_hover_text(validation_tooltip)
-                            .clicked()
-                        {
-                            self.gui_state.connection_state = con.clone();
-                            self.gui_state.connection_state.build_url();
-                        }
-                    });
-
-                    ui.add_sized([140.0, 24.0], Button::new(RichText::new("Cancel")));
-                });
-            });
+            connection_manager,
         }
     }
 
     fn menu_bar(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("menubar_container").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
-                ui.button(
-                    RichText::new(icon::NETWORK)
-                        .size(24.0)
-                        .color(Color32::LIGHT_BLUE),
-                )
-                .on_hover_text("Connection settings");
+                if ui
+                    .button(
+                        RichText::new(icon::NETWORK)
+                            .size(24.0)
+                            .color(Color32::LIGHT_BLUE),
+                    )
+                    .on_hover_text("Connection settings")
+                    .clicked()
+                {
+                    self.gui_state.connection_modal_state =
+                        Some(self.gui_state.connection_state.clone());
+                }
                 ui.button(
                     RichText::new(icon::PLAY)
                         .size(24.0)
@@ -166,7 +117,7 @@ impl App<'_> {
                         if item.expanded {
                             ui.label("");
                             ui.label("");
-                            ui.label(item.body.clone());
+                            ui.label(&*item.body);
                             ui.end_row();
                         }
                     }
@@ -191,8 +142,21 @@ impl App<'_> {
                     funnel_tooltip = "Filtering with valid regex".into()
                 }
 
+                let connection_state_message = match self.gui_state.connection {
+                    ConnectionStatus::Disconnected => "Not connected".into(),
+                    ConnectionStatus::Connecting => {
+                        format!("Connecting to {}", self.gui_state.connection_state.hostname)
+                    }
+                    ConnectionStatus::Connected => {
+                        format!("Connected to {}", self.gui_state.connection_state.hostname)
+                    }
+                };
+
                 let available_width = ui.available_width() - 24.0; // Leave space for menu icon and padding between elements
-                ui.add_sized([available_width, 24.0], Label::new("Not connected"));
+                ui.add_sized(
+                    [available_width, 24.0],
+                    Label::new(connection_state_message),
+                );
                 ui.label(RichText::new(icon::FUNNEL).color(funnel_colour))
                     .on_hover_text(funnel_tooltip);
             })
@@ -228,8 +192,74 @@ fn highlight_text(ui: &mut Ui, text: &str, highlights: &[model::Highlight]) {
     }
 }
 
-impl eframe::App for App<'_> {
+impl App {
+    fn change_connection_state(&mut self, new_state: ConnectionStatus) {
+        self.gui_state.connection = new_state;
+        if self.gui_state.connection == ConnectionStatus::Connected
+            && self.gui_state.connection_state.wildcard
+        {
+            // TODO
+            let _ = self
+                .connection_manager
+                .tx
+                .send(crate::rabbit::ConnectionCommand::Bind {
+                    exchange: "2steps".into(),
+                    routing_key: "".into(),
+                    options: QueueBindOptions::default(),
+                    arguments: FieldTable::default(),
+                });
+        }
+    }
+    fn process_connection_update(&mut self, update: ConnectionUpdate) {
+        match update {
+            ConnectionUpdate::Connected => {
+                self.change_connection_state(ConnectionStatus::Connected)
+            }
+            ConnectionUpdate::Disconnected => {
+                self.change_connection_state(ConnectionStatus::Disconnected)
+            }
+            ConnectionUpdate::Connecting => {
+                self.change_connection_state(ConnectionStatus::Connected)
+            }
+            ConnectionUpdate::TextDelivery {
+                headers,
+                content,
+                content_type,
+            } => {
+                let mut item = ModelItem {
+                    headers: Rc::new(headers),
+                    body: Rc::new(content),
+                    expanded: false,
+                    highlights: Vec::default(),
+                };
+                item.apply_filter(&self.gui_state);
+                // TODO check if max length is hit, in which case we must pop from the front first.
+                self.gui_data.data.push_back(item);
+            }
+            ConnectionUpdate::BinaryDelivery {
+                headers,
+                content_type,
+            } => {
+                let mut item = ModelItem {
+                    headers: Rc::new(headers),
+                    body: Rc::new("-Binary data-".into()),
+                    expanded: false,
+                    highlights: Vec::default(),
+                };
+                item.apply_filter(&self.gui_state);
+                // TODO check if max length is hit, in which case we must pop from the front first.
+                self.gui_data.data.push_back(item);
+            }
+        }
+    }
+}
+
+impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        while let Some(update) = self.connection_manager.rx.try_recv().ok() {
+            self.process_connection_update(update);
+        }
+
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ctx, |ui| {
