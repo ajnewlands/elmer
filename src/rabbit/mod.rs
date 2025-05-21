@@ -128,13 +128,13 @@ async fn connection_manager_task(
                 queue = channel
                     .queue_declare("", queue_declare_options.clone(), FieldTable::default())
                     .await?;
+                let opts = BasicConsumeOptions {
+                    exclusive: true,
+                    no_ack: true,
+                    ..Default::default()
+                };
                 consumer = channel
-                    .basic_consume(
-                        queue.name().as_str(),
-                        "",
-                        BasicConsumeOptions::default(),
-                        FieldTable::default(),
-                    )
+                    .basic_consume(queue.name().as_str(), "", opts, FieldTable::default())
                     .await?;
                 egui_ctx = ctx;
 
