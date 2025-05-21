@@ -12,6 +12,7 @@ The 'Wildcard subscription' option, if selected, will cause an initial subscript
 
 In the event that the accumulated data gets out of hand, you can clear it by clicking the 'clear data' button; ![image](https://github.com/user-attachments/assets/f02e8441-42f6-4f64-bb2a-ffdf855c6e04)
 
-You can also search and filter by entering regular expressions in the filter entry box. Highlighted strings will be matched, and non-matching results will be hidden. By default only headers are searched, on the assumption that these containing message routing information, and message bodies are likely to be large indeed. However, you can check the 'filter body' option as well (under the hamburger menu) to search everything.
+You can also search and filter by entering regular expressions in the filter entry box. Highlighted strings will be matched, and non-matching results will be hidden. By default only headers are searched, on the assumption that these containing message routing information, and message bodies are likely to be large indeed. However, you can check the 'filter body' option as well (under the hamburger menu) to search everything. Also note the filtration indicator in the bottom right part of the screen, which will turn red if the regex is invalid (diagnostics available in the tooltip): ![image](https://github.com/user-attachments/assets/c444d88b-6ff1-444a-83ff-2d528c014b2a)
+
 
 
