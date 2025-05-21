@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::VecDeque, rc::Rc};
+use std::{collections::VecDeque, rc::Rc};
 
 use super::state::GuiState;
 
@@ -10,15 +10,7 @@ pub struct Model {
 
 impl Default for Model {
     fn default() -> Self {
-        let mut data = VecDeque::default();
-        for i in 0..20 {
-            data.push_back(ModelItem {
-                headers: Rc::new(format!("Data headers {}", i)),
-                body: Rc::new(format!("Data body {}", i)),
-                expanded: false,
-                highlights: Vec::default(),
-            });
-        }
+        let data = VecDeque::default();
 
         Self {
             data,
@@ -35,6 +27,7 @@ impl Model {
     }
 }
 
+#[derive(PartialEq, Eq)]
 pub enum HighlightField {
     Header,
     Body,
@@ -55,17 +48,15 @@ pub struct ModelItem {
 
 impl ModelItem {
     pub fn apply_filter(&mut self, gui_state: &GuiState) {
-        match &gui_state.regex {
+        match &gui_state.filter_state.regex {
             None => {
                 self.highlights.clear();
                 self.highlights.shrink_to_fit();
             }
             Some(regex) => {
-                let mut it = regex.find_iter(&self.headers).peekable();
-                if it.peek().is_none() {
-                    self.highlights.clear();
-                    self.highlights.shrink_to_fit();
-                } else {
+                self.highlights.clear();
+                if gui_state.filter_state.filter_headers {
+                    let it = regex.find_iter(&self.headers).peekable();
                     self.highlights = it
                         .map(|m| Highlight {
                             field: HighlightField::Header,
@@ -74,6 +65,17 @@ impl ModelItem {
                         })
                         .collect();
                 }
+                if gui_state.filter_state.filter_body {
+                    let it = regex.find_iter(&self.body).peekable();
+                    self.highlights = it
+                        .map(|m| Highlight {
+                            field: HighlightField::Body,
+                            start: m.start(),
+                            end: m.end(),
+                        })
+                        .collect();
+                }
+                self.highlights.shrink_to_fit();
             }
         }
     }

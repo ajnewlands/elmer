@@ -151,6 +151,7 @@ async fn connection_manager_task(
         }
 
         '_connected: loop {
+            egui_ctx.request_repaint();
             tokio::select! {
                 r = rx.recv() => match r {
                     Some(ConnectionCommand::Disconnect) => {
@@ -203,15 +204,14 @@ async fn connection_manager_task(
 
                         // TODO think about leveraging the content-type here if it's available.
                         let content_type: Option<String> = msg.properties.content_type().as_ref().map(|c|c.to_string());
-                        match String::from_utf8(msg.data) {
-                            Ok(content) => tx.send(ConnectionUpdate::TextDelivery { headers, content, content_type }),
-                            Err(_) => tx.send(ConnectionUpdate::BinaryDelivery{ headers, content_type}),
+                        let update = match String::from_utf8(msg.data) {
+                            Ok(content) => ConnectionUpdate::TextDelivery { headers, content, content_type },
+                            Err(_) => ConnectionUpdate::BinaryDelivery{ headers, content_type},
                         };
-                        egui_ctx.request_repaint();
+                        tx.send(update).expect("Internal channel closed");
                     }
                     Some(Err(_)) => {
-                        // TODO report error.
-                        let _ = tx.send(ConnectionUpdate::Disconnected);
+                        let _ = tx.send(ConnectionUpdate::Disconnected).expect("Internal channel closed");
                         continue 'not_connected;
                     }
                 }
