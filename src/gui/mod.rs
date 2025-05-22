@@ -5,12 +5,13 @@ use lapin::{options::QueueBindOptions, types::FieldTable};
 use model::ModelItem;
 use state::ConnectionStatus;
 
-use crate::rabbit::{ConnectionManager, ConnectionUpdate};
+use crate::rabbit::{Binding, ConnectionManager, ConnectionUpdate};
 pub mod connection_modal;
 mod menu_bar;
 mod model;
 mod state;
 mod status_bar;
+mod subscriptions_window;
 mod tree_data_view;
 
 mod enums;
@@ -20,6 +21,7 @@ pub struct App {
     gui_state: state::GuiState,
     gui_data: model::Model,
     connection_manager: ConnectionManager,
+    queue_bindings: Vec<Binding>,
 }
 
 impl App {
@@ -28,6 +30,7 @@ impl App {
             gui_state: state::GuiState::default(),
             gui_data: model::Model::default(),
             connection_manager,
+            queue_bindings: Vec::default(),
         }
     }
 }
@@ -60,6 +63,12 @@ impl App {
             }
             ConnectionUpdate::Connecting => {
                 self.change_connection_state(ConnectionStatus::Connecting)
+            }
+            ConnectionUpdate::Bound(binding) => {
+                self.queue_bindings.push(binding);
+            }
+            ConnectionUpdate::Unbound(binding) => {
+                self.queue_bindings.retain(|b| b.id != binding.id);
             }
             ConnectionUpdate::TextDelivery {
                 headers,
@@ -102,13 +111,14 @@ impl eframe::App for App {
 
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
-            .show(ctx, |ui| {
+            .show(ctx, |_ui| {
                 ctx.set_visuals(egui::Visuals {
                     menu_corner_radius: CornerRadius::ZERO,
                     override_text_color: Some(Color32::WHITE),
                     ..egui::Visuals::dark()
                 });
-                self.show_connection_modal(ui, ctx);
+                self.subscriptions_window(ctx);
+                self.show_connection_modal(ctx);
 
                 self.menu_bar(ctx);
                 self.status_bar(ctx);

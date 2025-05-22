@@ -9,6 +9,7 @@ use lapin::{
 
 use serde_json::json;
 use tokio::sync::mpsc;
+use uuid::Uuid;
 
 /// Carries commands from the UI to the rabbit connection manager
 pub enum ConnectionCommand {
@@ -21,11 +22,15 @@ pub enum ConnectionCommand {
         options: QueueBindOptions,
         arguments: FieldTable,
     },
-    Unbind {
-        exchange: String,
-        routing_key: String,
-        arguments: FieldTable,
-    },
+    Unbind(Binding),
+}
+
+#[derive(Clone)]
+pub struct Binding {
+    pub id: Uuid,
+    pub exchange: String,
+    pub routing_key: String,
+    pub arguments: FieldTable,
 }
 
 /// Carries messages from the connection/connection manager to UI.
@@ -44,6 +49,8 @@ pub enum ConnectionUpdate {
         headers: String,
         content_type: Option<String>,
     },
+    Bound(Binding),
+    Unbound(Binding),
 }
 
 pub struct ConnectionManager {
@@ -68,18 +75,35 @@ impl ConnectionManager {
 
         Self { tx, rx }
     }
+
+    pub fn unbind(&self, binding: Binding) {
+        self.tx
+            .send(ConnectionCommand::Unbind(binding))
+            .expect("Internal channel closed");
+    }
 }
 
-fn field_table_to_json(field_table: &FieldTable) -> serde_json::Value {
+pub(crate) fn field_table_to_json(field_table: &FieldTable) -> serde_json::Value {
     let mut json_map = serde_json::Map::new();
 
     for (key, value) in field_table.inner().iter() {
         let json_value = match value {
+            AMQPValue::Void => json!(null),
+            AMQPValue::ShortShortInt(i) => json!(i),
+            AMQPValue::ShortShortUInt(u) => json!(u),
+            AMQPValue::ShortInt(i) => json!(i),
+            AMQPValue::ShortUInt(u) => json!(u),
+            AMQPValue::LongInt(i) => json!(i),
+            AMQPValue::LongUInt(u) => json!(u),
+            AMQPValue::LongLongInt(i) => json!(i),
             AMQPValue::LongString(ls) => json!(ls.to_string()),
             AMQPValue::ShortString(ss) => json!(ss.to_string()),
             AMQPValue::Boolean(b) => json!(b),
             AMQPValue::Float(f) => json!(f),
             AMQPValue::Double(d) => json!(d),
+            AMQPValue::DecimalValue(d) => json!({"scale": d.scale, "value": d.value}),
+            AMQPValue::Timestamp(ts) => json!(ts), // TODO consider formatting timestamps
+            AMQPValue::ByteArray(bytes) => json!(bytes),
             AMQPValue::FieldArray(arr) => {
                 json!(arr
                     .as_slice()
@@ -88,7 +112,6 @@ fn field_table_to_json(field_table: &FieldTable) -> serde_json::Value {
                     .collect::<Vec<_>>())
             }
             AMQPValue::FieldTable(ft) => field_table_to_json(ft),
-            _ => json!(format!("{:?}", value)),
         };
         json_map.insert(key.to_string(), json_value);
     }
@@ -171,18 +194,16 @@ async fn connection_manager_task(
                                 queue.name().as_str(),
                                 &exchange,
                                 &routing_key,
-                                options,
-                                arguments,
+                                options.clone(),
+                                arguments.clone(),
                             )
                             .await?;
+                        tx.send(ConnectionUpdate::Bound(Binding {  exchange, routing_key, arguments, id: Uuid::new_v4() })).expect("Internal channel closed");
                     }
-                    Some(ConnectionCommand::Unbind {
-                        exchange,
-                        routing_key,
-                        arguments,
-                    }) => {
-                            channel.queue_unbind(queue.name().as_str(), &exchange, &routing_key, arguments)
+                    Some(ConnectionCommand::Unbind(binding) ) => {
+                            channel.queue_unbind(queue.name().as_str(), &binding.exchange, &binding.routing_key, binding.arguments.clone())
                                 .await?;
+                            tx.send(ConnectionUpdate::Unbound(binding)).expect("Internal connection closed")
                     }
                     None => {
                         log::debug!(

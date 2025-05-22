@@ -18,7 +18,7 @@ fn modal_label(ui: &mut Ui, label: &str, binding: &mut String, password: bool) -
 }
 
 impl App {
-    pub(crate) fn show_connection_modal(&mut self, _ui: &mut Ui, ctx: &egui::Context) {
+    pub(crate) fn show_connection_modal(&mut self, ctx: &egui::Context) {
         let modal = egui::containers::Modal::new(Id::new("connection"));
 
         let mut modal_result = ModalResult::None;

@@ -93,6 +93,10 @@ impl super::App {
                 &mut self.gui_state.filter_state.filter_body,
                 RichText::new("Filter body").size(16.0),
             );
+            ui.checkbox(
+                &mut self.gui_state.show_subscriptions,
+                RichText::new("Subscriptions window").size(16.0),
+            );
         });
     }
 

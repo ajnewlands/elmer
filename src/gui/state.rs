@@ -29,8 +29,8 @@ pub struct GuiState {
     pub filter_state: FilterState,
     pub connection_parameters: ConnectionParams,
     pub connection_modal_parameters: Option<ConnectionParams>,
-    // TODO; rename this to be more distinct.
     pub connection: ConnectionStatus,
+    pub show_subscriptions: bool,
 }
 
 impl Default for GuiState {
@@ -40,6 +40,7 @@ impl Default for GuiState {
             connection_parameters: ConnectionParams::default(),
             connection_modal_parameters: Some(ConnectionParams::default()),
             connection: ConnectionStatus::Disconnected,
+            show_subscriptions: false,
         }
     }
 }
