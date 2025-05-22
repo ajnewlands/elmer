@@ -48,25 +48,6 @@ impl Display for SubscriptionArgumentType {
     }
 }
 
-impl SubscriptionArgumentType {
-    fn hint(&self) -> String {
-        match self {
-            Self::Boolean => "true",
-            Self::LongInt
-            | Self::LongUInt
-            | Self::LongLongInt
-            | Self::ShortInt
-            | Self::ShortUInt
-            | Self::ShortShortInt
-            | Self::ShortShortUInt => "0",
-            Self::DecimalValue => "{ scale: 1, value: 0 }",
-            Self::LongString => "",
-            Self::Float | Self::Double => "0.0",
-        }
-        .into()
-    }
-}
-
 pub(crate) struct SubscriptionParams {
     pub exchange: String,
     pub routing_key: String,
@@ -178,6 +159,15 @@ impl super::App {
             let mut delete_index = None;
 
             let mut result: ModalResult = ModalResult::None;
+
+            let validation_error =
+                if let Some(a) = params.arguments.iter().find(|i| i.parse_value().is_err()) {
+                    a.parse_value().err()
+                } else if params.exchange.is_empty() {
+                    Some("Exchange cannot be empty".into())
+                } else {
+                    None
+                };
 
             Window::new("Add subscription")
                 .movable(true)
@@ -362,13 +352,19 @@ impl super::App {
                         .size(Size::remainder())
                         .horizontal(|mut strip| {
                             strip.cell(|ui| {
-                                if ui
-                                    .add_sized(
-                                        [ui.available_width(), 24.0],
-                                        Button::new(RichText::new("OK")).fill(Color32::DARK_GREEN),
-                                    )
-                                    .clicked()
-                                {}
+                                ui.add_enabled_ui(validation_error.is_none(), |ui| {
+                                    if ui
+                                        .add_sized(
+                                            [ui.available_width(), 24.0],
+                                            Button::new(RichText::new("OK"))
+                                                .fill(Color32::DARK_GREEN),
+                                        )
+                                        .on_disabled_hover_text(
+                                            validation_error.as_deref().unwrap_or_default(),
+                                        )
+                                        .clicked()
+                                    {}
+                                });
                             });
                             strip.cell(|ui| {
                                 if ui
