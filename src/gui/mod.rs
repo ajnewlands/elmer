@@ -6,6 +6,7 @@ use model::ModelItem;
 use state::ConnectionStatus;
 
 use crate::rabbit::{Binding, ConnectionManager, ConnectionUpdate};
+mod add_subscription_window;
 pub mod connection_modal;
 mod menu_bar;
 mod model;
@@ -117,6 +118,7 @@ impl eframe::App for App {
                     override_text_color: Some(Color32::WHITE),
                     ..egui::Visuals::dark()
                 });
+                self.add_subscription_window(ctx);
                 self.subscriptions_window(ctx);
                 self.show_connection_modal(ctx);
 

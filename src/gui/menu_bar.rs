@@ -3,6 +3,8 @@ use eframe::egui::{self, Button, Color32, FontFamily, FontId, RichText};
 use egui::Ui;
 use egui_phosphor::regular as icon;
 
+use super::add_subscription_window::SubscriptionParams;
+
 impl super::App {
     /// Open the connection settings window e.g. to connect to a different
     /// bus
@@ -62,9 +64,19 @@ impl super::App {
         }
     }
 
+    fn subscribe_button(&mut self, ui: &mut Ui) {
+        if ui
+            .button(RichText::new(icon::PLUS).size(24.0).color(Color32::GREEN))
+            .on_hover_text("Add subscription")
+            .clicked()
+        {
+            self.gui_state.add_subscription_parameters = Some(SubscriptionParams::default());
+        }
+    }
+
     fn regex_entry(&mut self, ui: &mut Ui) {
         // Add a text box that fills the remaining space
-        let available_width = ui.available_width() - 32.0; // Leave space for menu icon and padding between elements
+        let available_width = ui.available_width() - 36.0; // Leave space for menu icon and padding between elements
         if ui
             .add_sized(
                 [available_width, 24.0],
@@ -106,6 +118,7 @@ impl super::App {
             egui::menu::bar(ui, |ui| {
                 self.connection_settings_button(ui);
                 self.connect_button(ui);
+                self.subscribe_button(ui);
                 self.clear_button(ui);
                 self.regex_entry(ui);
                 self.menu_button(ui);

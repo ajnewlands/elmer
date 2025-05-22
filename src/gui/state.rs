@@ -31,6 +31,7 @@ pub struct GuiState {
     pub connection_modal_parameters: Option<ConnectionParams>,
     pub connection: ConnectionStatus,
     pub show_subscriptions: bool,
+    pub add_subscription_parameters: Option<SubscriptionParams>,
 }
 
 impl Default for GuiState {
@@ -41,6 +42,7 @@ impl Default for GuiState {
             connection_modal_parameters: Some(ConnectionParams::default()),
             connection: ConnectionStatus::Disconnected,
             show_subscriptions: false,
+            add_subscription_parameters: None,
         }
     }
 }
@@ -95,6 +97,8 @@ impl Default for ConnectionParams {
 }
 
 use lapin::uri;
+
+use super::add_subscription_window::SubscriptionParams;
 impl ConnectionParams {
     pub fn build_url(&self) -> uri::AMQPUri {
         let scheme: uri::AMQPScheme = if self.tls {

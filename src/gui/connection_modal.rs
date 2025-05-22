@@ -1,5 +1,3 @@
-use std::default;
-
 use super::{enums::ModalResult, prelude::*};
 
 fn modal_label(ui: &mut Ui, label: &str, binding: &mut String, password: bool) -> Response {

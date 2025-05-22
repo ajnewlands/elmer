@@ -1,9 +1,5 @@
-use eframe::{
-    egui::{
-        Align, Button, Color32, Context, FontFamily, FontId, Grid, Label, Layout, RichText, Style,
-        TextStyle, Window,
-    },
-    wgpu::ColorWrites,
+use eframe::egui::{
+    Align, Button, Color32, Context, FontFamily, FontId, Label, Layout, RichText, Window,
 };
 use egui_extras::{Column, TableBuilder};
 use egui_phosphor::regular as icon;
@@ -12,6 +8,8 @@ impl super::App {
     pub(crate) fn subscriptions_window(&mut self, ctx: &Context) {
         Window::new("Subscriptions")
             .movable(true)
+            .resizable(true)
+            .collapsible(false)
             .open(&mut self.gui_state.show_subscriptions)
             .show(ctx, |ui| {
                 let style = ui.style_mut();
@@ -22,13 +20,14 @@ impl super::App {
                 let available_height = ui.available_height();
                 let table = TableBuilder::new(ui)
                     .striped(false)
-                    .resizable(true)
+                    .resizable(false)
                     .cell_layout(Layout::right_to_left(Align::Center))
                     .column(Column::auto())
                     .column(Column::auto())
                     .column(Column::remainder())
                     .column(Column::auto().at_least(32.0))
-                    .max_scroll_height(available_height);
+                    .auto_shrink(false)
+                    .max_scroll_height(available_height - 120.0); // leave room for window decorations etc
 
                 table
                     .header(16.0, |mut header| {
