@@ -1,12 +1,18 @@
-use std::fmt::Display;
+use std::{collections::BTreeMap, fmt::Display};
 
 use eframe::egui::{
     self, Align, Button, Color32, Context, FontFamily, FontId, Frame, Grid, Layout, RichText,
-    Stroke, TextEdit, Window,
+    Stroke, TextBuffer, TextEdit, Window,
 };
 use egui_extras::{Column, Size, StripBuilder, TableBuilder};
 use egui_phosphor::regular as icon;
-use lapin::types::AMQPValue;
+use lapin::{
+    options::QueueBindOptions,
+    types::{AMQPValue, FieldTable, ShortString},
+};
+use uuid::Uuid;
+
+use crate::rabbit::Binding;
 
 use super::enums::ModalResult;
 
@@ -52,6 +58,27 @@ pub(crate) struct SubscriptionParams {
     pub exchange: String,
     pub routing_key: String,
     pub arguments: Vec<RawSubscriptionArgument>,
+}
+
+impl SubscriptionParams {
+    // TODO; just use this to generate the dialogue validation error
+    pub(crate) fn as_binding(&self) -> Result<Binding, String> {
+        if self.exchange.is_empty() {
+            return Err("Exchange cannot be empty".into());
+        }
+
+        let mut args = BTreeMap::<ShortString, AMQPValue>::new();
+        for a in &self.arguments {
+            args.insert(ShortString::from(a.name.clone()), a.parse_value()?);
+        }
+
+        Ok(Binding {
+            id: Uuid::new_v4(),
+            exchange: self.exchange.clone(),
+            routing_key: self.routing_key.clone(),
+            arguments: args.into(),
+        })
+    }
 }
 
 pub struct RawSubscriptionArgument {
@@ -160,15 +187,19 @@ impl super::App {
 
             let mut result: ModalResult = ModalResult::None;
 
-            let validation_error =
-                if let Some(a) = params.arguments.iter().find(|i| i.parse_value().is_err()) {
-                    a.parse_value().err()
-                } else if params.exchange.is_empty() {
-                    Some("Exchange cannot be empty".into())
-                } else {
-                    None
-                };
+            let binding: Option<Binding>;
+            let error: String;
 
+            match params.as_binding() {
+                Ok(b) => {
+                    binding = Some(b);
+                    error = String::default();
+                }
+                Err(e) => {
+                    binding = None;
+                    error = e;
+                }
+            }
             Window::new("Add subscription")
                 .movable(true)
                 .resizable(true)
@@ -352,18 +383,18 @@ impl super::App {
                         .size(Size::remainder())
                         .horizontal(|mut strip| {
                             strip.cell(|ui| {
-                                ui.add_enabled_ui(validation_error.is_none(), |ui| {
+                                ui.add_enabled_ui(error.is_empty(), |ui| {
                                     if ui
                                         .add_sized(
                                             [ui.available_width(), 24.0],
                                             Button::new(RichText::new("OK"))
                                                 .fill(Color32::DARK_GREEN),
                                         )
-                                        .on_disabled_hover_text(
-                                            validation_error.as_deref().unwrap_or_default(),
-                                        )
+                                        .on_disabled_hover_text(error)
                                         .clicked()
-                                    {}
+                                    {
+                                        let _ = self.connection_manager.bind(binding.unwrap());
+                                    }
                                 });
                             });
                             strip.cell(|ui| {
@@ -384,8 +415,8 @@ impl super::App {
                 params.arguments.remove(index);
             }
             match result {
-                ModalResult::Cancel => self.gui_state.add_subscription_parameters = None,
-                _ => (),
+                ModalResult::None => (),
+                _ => self.gui_state.add_subscription_parameters = None,
             }
         }
     }

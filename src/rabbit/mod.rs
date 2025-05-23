@@ -25,7 +25,7 @@ pub enum ConnectionCommand {
     Unbind(Binding),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Binding {
     pub id: Uuid,
     pub exchange: String,
@@ -79,6 +79,17 @@ impl ConnectionManager {
     pub fn unbind(&self, binding: Binding) {
         self.tx
             .send(ConnectionCommand::Unbind(binding))
+            .expect("Internal channel closed");
+    }
+
+    pub fn bind(&self, binding: Binding) {
+        self.tx
+            .send(crate::rabbit::ConnectionCommand::Bind {
+                exchange: binding.exchange,
+                routing_key: binding.routing_key,
+                options: QueueBindOptions::default(),
+                arguments: binding.arguments,
+            })
             .expect("Internal channel closed");
     }
 }
