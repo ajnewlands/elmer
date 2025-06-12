@@ -40,6 +40,7 @@ pub struct Highlight {
 }
 
 pub struct ModelItem {
+    pub timestamp: String,
     pub headers: Rc<String>,
     pub body: Rc<String>,
     pub expanded: bool,

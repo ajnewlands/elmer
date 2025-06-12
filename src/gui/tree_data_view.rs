@@ -34,7 +34,7 @@ impl super::App {
                             {
                                 item.expanded = !item.expanded;
                             }
-                            ui.label("timestamp");
+                            ui.label(RichText::new(&item.timestamp).size(14.0));
                             Self::highlight_text(
                                 ui,
                                 &item.headers,

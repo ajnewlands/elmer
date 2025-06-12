@@ -77,6 +77,9 @@ impl App {
                 content_type,
             } => {
                 let mut item = ModelItem {
+                    timestamp: chrono::Local::now()
+                        .format("%m/%d %H:%M:%S%.3f")
+                        .to_string(),
                     headers: Rc::new(headers),
                     body: Rc::new(content),
                     expanded: false,
@@ -91,6 +94,9 @@ impl App {
                 content_type,
             } => {
                 let mut item = ModelItem {
+                    timestamp: chrono::Local::now()
+                        .format("%m/%d %H:%M:%S%.3f")
+                        .to_string(),
                     headers: Rc::new(headers),
                     body: Rc::new("-Binary data-".into()),
                     expanded: false,
